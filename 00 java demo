@@ -1,0 +1,349 @@
+package com.chainup.exchange.robot;
+
+import com.alibaba.fastjson.JSONObject;
+import org.apache.commons.httpclient.HttpClient;
+import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.commons.httpclient.methods.PostMethod;
+import org.apache.commons.io.IOUtils;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.util.EntityUtils;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.text.DecimalFormat;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+
+/**
+ * @Description desc
+ * @Author allengent@163.com
+ * @Date 2020/6/15 15:10
+ * @Version 1.0
+ */
+public class EntrustUtils {
+
+    public static String api_key = "9f7fdf227d6f2a661fe1b0bff20d7bc5";
+    public static String secret_key = "ca58e53d628a0aedb08937c9967cc33e";
+
+    private static String host = "http://d87f7e0c-default-frontendp-5d3a-1169523578.ap-southeast-1.elb.amazonaws.com";
+
+   // private static String host = "http://localhost:8080";
+
+    private static String createOrderUrl = "/exchange-open-api/api/create_order";
+    private static String queryOrderUrl = "/exchange-open-api/api/new_order";
+
+    private static String queryNewDeal = "/exchange-quotation-exchange-api/api/get_ticker";
+
+
+
+    public static String okUrlBtc = "https://www.okex.me/v2/spot/instruments/BTC-USDT/candles?granularity=300&size=1&t=";
+    public static String okUrlEth = "https://www.okex.me/v2/spot/instruments/ETH-USDT/candles?granularity=300&size=1&t=";
+
+    public static float getBtcNowPrice() throws IOException {
+        HttpGet httpget = new HttpGet(okUrlBtc);
+        HttpResponse response = HttpUtil.getHttpClient().execute(httpget);
+        String content = EntityUtils.toString(response.getEntity(), "UTF-8");
+        JSONObject ob = JSONObject.parseObject(content);
+        String aray = ob.getJSONArray("data").getJSONArray(0).get(4).toString();
+        return Float.parseFloat(aray);
+
+    }
+
+    public static float getEthNowPrice() throws IOException {
+        HttpGet httpget = new HttpGet(okUrlEth);
+        HttpResponse response = HttpUtil.getHttpClient().execute(httpget);
+        String content = EntityUtils.toString(response.getEntity(), "UTF-8");
+        JSONObject ob = JSONObject.parseObject(content);
+        String aray = ob.getJSONArray("data").getJSONArray(0).get(4).toString();
+        return Float.parseFloat(aray);
+
+    }
+
+
+    public static String createMarketBuyOrder(String symbol, float fund) {
+
+        // api/create_order?symbol=btcusdt&api_key=111111&time=124345343&sign=23234&volume=3589&side=BUY&price=3578&type=2
+
+        /** 封装需要签名的参数 */
+        TreeMap<String, String> params = new TreeMap<String, String>();
+        params.put("api_key", api_key);
+        params.put("symbol", symbol);
+        params.put("time", System.currentTimeMillis() + "");
+
+
+        params.put("volume", "" + fund);
+
+        params.put("side", "BUY");
+
+        params.put("type", "2");
+
+        /** 拼接签名字符串，md5签名 */
+
+        String sign = makeSign(params, secret_key);
+        params.put("sign", sign);
+
+        /** http请求 */
+        String url = host + createOrderUrl + "?";
+        String resultJson = post(url, params);
+        System.out.println(resultJson);
+
+        return resultJson;
+
+    }
+
+    public static String createMarketSellOrder(String symbol, float vol) {
+
+        // api/create_order?symbol=btcusdt&api_key=111111&time=124345343&sign=23234&volume=3589&side=BUY&price=3578&type=2
+
+        /** 封装需要签名的参数 */
+        TreeMap<String, String> params = new TreeMap<String, String>();
+        params.put("api_key", api_key);
+        params.put("symbol", symbol);
+        params.put("time", System.currentTimeMillis() + "");
+
+
+        params.put("volume", "" + vol);
+
+        params.put("side", "SELL");
+
+        params.put("type", "2");
+
+        /** 拼接签名字符串，md5签名 */
+
+        String sign = makeSign(params, secret_key);
+        params.put("sign", sign);
+
+        /** http请求 */
+        String url = host + createOrderUrl + "?";
+        String resultJson = post(url, params);
+        System.out.println(resultJson);
+
+        return resultJson;
+
+    }
+
+    public void createMassLimitOrder(String symbol, int orders, float priceMin, float priceMax, float volumeMin, float volumeMax,boolean isBuy){
+        DecimalFormat decimalFormat = new DecimalFormat("0.00");//构造方法的字符格式这里如果小数不足2位,会以0补足.
+        for (int i=0;i<orders;i++)
+        {
+            float price = (float) ((priceMax-priceMin)* Math.random() + priceMin);
+
+
+            String priceStr = decimalFormat.format(price);
+
+            float volume = (float) ((volumeMax - volumeMin) * Math.random() + volumeMin);
+            String volumeStr = decimalFormat.format(volume);
+
+            createLimitOrder(symbol,priceStr,volumeStr,isBuy);
+
+        }
+
+
+    }
+    public static String createLimitOrder(String symbol, String price, String volume, boolean isBuy) {
+
+        // api/create_order?symbol=btcusdt&api_key=111111&time=124345343&sign=23234&volume=3589&side=BUY&price=3578&type=2
+
+        /** 封装需要签名的参数 */
+        TreeMap<String, String> params = new TreeMap<String, String>();
+        params.put("api_key", api_key);
+        params.put("symbol", symbol);
+        params.put("time", System.currentTimeMillis() + "");
+
+
+        params.put("volume", volume);
+        params.put("price", price);
+        if (isBuy) {
+            params.put("side", "BUY");
+        } else {
+            params.put("side", "SELL");
+        }
+        params.put("type", "1");
+
+        /** 拼接签名字符串，md5签名 */
+
+        String sign = makeSign(params, secret_key);
+        params.put("sign", sign);
+
+        /** http请求 */
+        String url = host + createOrderUrl + "?";
+        String resultJson = post(url, params);
+        System.out.println(resultJson);
+
+        return resultJson;
+
+    }
+
+    public static GetNewDealMsg getNewDeal(String symbol) {
+
+
+        /** http请求 */
+        String url = host + queryNewDeal + "?symbol=" + symbol;
+        String resultJson = get(url, null);
+        GetNewDealResponse response = JSONObject.parseObject(resultJson, GetNewDealResponse.class);
+
+        return response.getData();
+
+    }
+
+
+    public String getNewOrder(String symbol) {
+
+        /** 封装需要签名的参数 */
+        TreeMap<String, String> params = new TreeMap<String, String>();
+        params.put("api_key", api_key);
+        params.put("page", "1");
+        params.put("pageSize", "10");
+        params.put("symbol", symbol);
+
+
+        params.put("time", System.currentTimeMillis() + "");
+        /** 拼接签名字符串，md5签名 */
+
+        String sign = makeSign(params, secret_key);
+        params.put("sign", sign);
+
+        /** http请求 */
+        String url = host + queryOrderUrl + "?";
+        String resultJson = get(url, params);
+        System.out.println(resultJson);
+
+        return resultJson;
+
+    }
+
+    public static String makeSign(TreeMap<String, String> params, String secret) {
+        StringBuilder result = new StringBuilder();
+        Set<Map.Entry<String, String>> entrys = params.entrySet();
+
+        for (Map.Entry<String, String> param : entrys) {
+            /** 去掉签名字段 */
+            if (param.getKey().equals("sign")) {
+                continue;
+            }
+
+            /** 空参数不参与签名 */
+            if (param.getValue() != null) {
+                result.append(param.getKey());
+                result.append(param.getValue().toString());
+            }
+        }
+        result.append(secret);
+        return getMD5(result.toString());
+
+    }
+
+    /**
+     * 通过post来提交数据，带参数的方法
+     *
+     * @param url    请求地址
+     * @param params 参数
+     * @return
+     */
+    public static String post(String url, Map<String, String> params) {
+        String str = null;
+        try {
+            HttpClient client = new HttpClient();
+            PostMethod method = new PostMethod(url);
+            //设定请求头的样式
+            method.setRequestHeader("Content-Type", "application/x-www-form-urlencoded;charset=utf-8");
+            if (params != null && params.size() > 0) {
+                for (Map.Entry<String, String> entry : params.entrySet()) {
+                    method.setParameter(entry.getKey(), entry.getValue());
+                }
+            }
+            int code = client.executeMethod(method);
+            if (code >= 200 && code < 300) {
+                InputStream in = method.getResponseBodyAsStream();
+                str = IOUtils.toString(in);
+            }
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return str;
+    }
+
+    /**
+     * 通过get来提交数据，带参数的方法
+     *
+     * @param url    请求地址
+     * @param params 参数
+     * @return
+     */
+    public static String get(String url, Map<String, String> params) {
+        String str = null;
+        try {
+            if (params != null && params.size() > 0) {
+                int x = 1;
+                for (Map.Entry<String, String> entry : params.entrySet()) {
+                    if (x == 1) {
+                        url = url + "?";
+                    } else {
+                        url = url + "&";
+                    }
+                    url += entry.getKey() + "=" + entry.getValue();
+                    x++;
+                }
+            }
+            HttpClient client = new HttpClient();
+            System.out.println("url:::" + url);
+            GetMethod method = new GetMethod(url);
+            //设定请求头的样式
+            method.setRequestHeader("Content-Type", "application/x-www-form-urlencoded;charset=utf-8");
+            int code = client.executeMethod(method);
+            if (code >= 200 && code < 300) {
+                InputStream in = method.getResponseBodyAsStream();
+                str = IOUtils.toString(in);
+            }
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return str;
+    }
+
+    /**
+     * 获取String的MD5值
+     *
+     * @param info 字符串
+     * @return 该字符串的MD5值
+     */
+    public static String getMD5(String info) {
+        try {
+            //获取 MessageDigest 对象，参数为 MD5 字符串，表示这是一个 MD5 算法（其他还有 SHA1 算法等）：
+            MessageDigest md5 = MessageDigest.getInstance("MD5");
+            //update(byte[])方法，输入原数据
+            //类似StringBuilder对象的append()方法，追加模式，属于一个累计更改的过程
+            md5.update(info.getBytes("UTF-8"));
+            //digest()被调用后,MessageDigest对象就被重置，即不能连续再次调用该方法计算原数据的MD5值。可以手动调用reset()方法重置输入源。
+            //digest()返回值16位长度的哈希值，由byte[]承接
+            byte[] md5Array = md5.digest();
+            //byte[]通常我们会转化为十六进制的32位长度的字符串来使用,本文会介绍三种常用的转换方法
+            return bytesToHex(md5Array);
+        } catch (NoSuchAlgorithmException e) {
+            return "";
+        } catch (UnsupportedEncodingException e) {
+            return "";
+        }
+    }
+
+    private static String bytesToHex(byte[] md5Array) {
+        StringBuilder strBuilder = new StringBuilder();
+        for (int i = 0; i < md5Array.length; i++) {
+            int temp = 0xff & md5Array[i];
+            String hexString = Integer.toHexString(temp);
+            if (hexString.length() == 1) {//如果是十六进制的0f，默认只显示f，此时要补上0
+                strBuilder.append("0").append(hexString);
+            } else {
+                strBuilder.append(hexString);
+            }
+        }
+        return strBuilder.toString();
+    }
+}
